@@ -87,6 +87,8 @@ class Client:
 
 
 if __name__ == "__main__":
+    # It's expected that some errors occur, while executing following code. I was testing how does it handle password mismatch
+    # and such things
     client1 = Client()
     client1.load_config(json.loads(open("./configs/client1.json").read()))
     client1.connect()
