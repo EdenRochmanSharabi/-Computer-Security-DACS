@@ -1,0 +1,18 @@
+{
+  "id" : "client1" ,
+  "password" : "bebra123",
+  "server" :
+  {
+    "ip" : "localhost" ,
+    "port" : 5000
+  },
+    "actions" :
+    {
+      "delay" : 2,
+      "steps" :
+      [
+        "INCREASE [10]",
+        "DECREASE [5]"
+      ]
+    }
+}

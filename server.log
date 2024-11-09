@@ -1,3 +1,8 @@
-2024-11-08 13:47:05,031 - Client client1 - Counter: 10
-2024-11-08 13:47:07,036 - Client client1 - Counter: 5
-2024-11-08 13:47:08,045 - Client client1 - Counter: 25
+INFO:root:Connection from: ('127.0.0.1', 51356)
+INFO:root:Connection from: ('127.0.0.1', 51357)
+INFO:root:Connection from: ('127.0.0.1', 51358)
+ERROR:root:ERROR Client client2 password mismatch.
+INFO:root:client1 increased counter by 10. New value: 10
+
+INFO:root:client1 decreased counter by 5. New value: 5
+
