@@ -1,7 +1,6 @@
 import socket
 import json
 import time
-from distutils.command.config import config
 
 from support_methods import validate_config
 
