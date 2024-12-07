@@ -3,6 +3,8 @@ import json
 import time
 from distutils.command.config import config
 
+from support_methods import validate_config
+
 
 class Client:
 
@@ -33,6 +35,13 @@ class Client:
         except KeyError as key:
             self.config = None # reset config as it was not loaded correctly
             print(f"ERROR: Config loading failed. Key '{key.args[-1]}' not found")
+            return
+
+        try:
+            validate_config(config)
+        except ValueError as err:
+            self.config = None
+            print(f"ERROR: Config loading failed. Invalid configuration: {err}")
             return
 
         print("Config was loaded successfully")
@@ -87,7 +96,7 @@ class Client:
             print("Client is not configured. Please load the config file first!")
             return
 
-        if self.action_delay <= 0:
+        if self.action_delay <= 0 or self.action_delay >= 10:
             print("WARNING: Incorrect action delay value. Default value 1 is used")
             self.action_delay = 1
 
@@ -108,16 +117,16 @@ if __name__ == "__main__":
     client1.load_config(json.loads(open("./configs/client1.json").read()))
     client1.connect()
 
-    # client2 = Client()
-    # client2.load_config(json.loads(open("./configs/client2.json").read()))
-    # client2.connect()
-    #
-    # client3 = Client()
-    # client3.load_config(json.loads(open("./configs/client3.json").read()))
-    # client3.connect()
-    # client3.execute_routines()
+    client2 = Client()
+    client2.load_config(json.loads(open("./configs/client2.json").read()))
+    client2.connect()
+
+    client3 = Client()
+    client3.load_config(json.loads(open("./configs/client3.json").read()))
+    client3.connect()
+    client3.execute_routines()
 
     client1.execute_routines()
     client1.close()
-    # client2.close()
-    # client3.close()
+    client2.close()
+    client3.close()

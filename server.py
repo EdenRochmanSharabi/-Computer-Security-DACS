@@ -2,14 +2,17 @@ import socket
 import threading
 import logging
 
+from support_methods import is_valid_password
+
 MAX_CLIENT_CONNECTIONS = 2
+MAX_INT_VALUE = 2 ** 31 - 1 # limiting value for integer
 
 
 def register_client(client_id: str, password: str) -> str:
     # Check password validity
-    if len(password) < 5:
-        logging.error(f"{client_id}: Password must be at least 5 characters long. Registration refused")
-        return f"ERROR {client_id}: Password must be at least 5 characters long. Registration refused"
+    if is_valid_password(password):
+        logging.error(f"{client_id}: Password doesn't fulfill requirements. Registration refused")
+        return f"ERROR {client_id}: : Password doesn't fulfill requirements. Registration refused"
 
     # Register new client if not presented in the database
     if client_id not in client_database:
@@ -36,7 +39,6 @@ def register_client(client_id: str, password: str) -> str:
     return f"ACK Client {client_id} is already registered. Connection added instead"
 
 
-
 def disconnect_client(client_id: str) -> str:
     # Reduce amount of connected instances
     client_database[client_id]['connections'] -= 1
@@ -52,15 +54,15 @@ def disconnect_client(client_id: str) -> str:
 def execute_action(client_id: str, action: str) -> str:
     try:
         action_type = action.split(" ")[0]
-        amount = int(action.split(" ")[1].strip("[]"))
+        amount = min(int(action.split(" ")[1].strip("[]")), MAX_INT_VALUE)
     except ValueError as e: # Catch incorrect action values
         logging.warning(f"{client_id}: Action ignored. Action value is not supported. Should be int")
         return f"WARNING {client_id}: Action ignored. Action value is not supported. Should be int"
 
-    if action_type == "INCREASE":
+    if action_type.upper() == "INCREASE":
         client_database[client_id]['counter'] += amount
 
-    elif action_type == "DECREASE":
+    elif action_type.upper() == "DECREASE":
         client_database[client_id]['counter'] -= amount
 
     else:
@@ -101,6 +103,7 @@ def handle_client(client_socket):
         logging.error(response)
 
     client_socket.close()
+
 
 
 if __name__ == '__main__':
