@@ -6,6 +6,11 @@ MAX_CLIENT_CONNECTIONS = 2
 
 
 def register_client(client_id: str, password: str) -> str:
+    # Check password validity
+    if len(password) < 5:
+        logging.error(f"{client_id}: Password must be at least 5 characters long. Registration refused")
+        return f"ERROR {client_id}: Password must be at least 5 characters long. Registration refused"
+
     # Register new client if not presented in the database
     if client_id not in client_database:
         client_database[client_id] = {
@@ -14,16 +19,20 @@ def register_client(client_id: str, password: str) -> str:
             'connections': 1
         }
 
+        logging.info(f"Registered client {client_id}")
         return f"ACK Client {client_id} registered."
 
     if client_database[client_id]['password'] != password:
-        return f"ERROR Client {client_id} password mismatch."
+        logging.error(f"{client_id}: Client  password mismatch. Registration refused")
+        return f"ERROR: {client_id}: Client  password mismatch. Registration refused"
 
     # Update already existing client data
     if client_database[client_id]["connections"] == MAX_CLIENT_CONNECTIONS:
+        logging.warning(f"Client {client_id} is already registered. Connection refused, as limit per client is reached")
         return f"ACK Client {client_id} is already registered. Connection refused, as limit per client is reached"
 
     client_database[client_id]["connections"] += 1
+    logging.info(f"Client {client_id} is already registered. Connection added instead")
     return f"ACK Client {client_id} is already registered. Connection added instead"
 
 
@@ -41,8 +50,12 @@ def disconnect_client(client_id: str) -> str:
 
 
 def execute_action(client_id: str, action: str) -> str:
-    action_type = action.split(" ")[0]
-    amount = int(action.split(" ")[1].strip("[]"))
+    try:
+        action_type = action.split(" ")[0]
+        amount = int(action.split(" ")[1].strip("[]"))
+    except ValueError as e: # Catch incorrect action values
+        logging.warning(f"{client_id}: Action ignored. Action value is not supported. Should be int")
+        return f"WARNING {client_id}: Action ignored. Action value is not supported. Should be int"
 
     if action_type == "INCREASE":
         client_database[client_id]['counter'] += amount
@@ -51,7 +64,8 @@ def execute_action(client_id: str, action: str) -> str:
         client_database[client_id]['counter'] -= amount
 
     else:
-        return f"WARNING {client_id}: Action type {action_type} not supported"
+        logging.warning(f"{client_id}: Action ignored. Action type {action_type} not supported")
+        return f"WARNING {client_id}: Action ignored. Action type {action_type} not supported"
 
     logging.info(f"{client_id} {action_type.lower()}d counter by {amount}. New value: {client_database[client_id]['counter']}\n")
 

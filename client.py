@@ -23,12 +23,19 @@ class Client:
         self.config = config
 
         # unpack the config
-        self.id = config['id']
-        self.password = config['password']
-        self.host_ip = config['server']['ip']
-        self.port = config['server']['port']
-        self.action_delay = config['actions']['delay']
-        self.action_steps = config['actions']['steps']
+        try:
+            self.id = config['id']
+            self.password = config['password']
+            self.host_ip = config['server']['ip']
+            self.port = config['server']['port']
+            self.action_delay = config['actions']['delay']
+            self.action_steps = config['actions']['steps']
+        except KeyError as key:
+            self.config = None # reset config as it was not loaded correctly
+            print(f"ERROR: Config loading failed. Key '{key.args[-1]}' not found")
+            return
+
+        print("Config was loaded successfully")
 
     def connect(self):
         # Check whether config is set up
@@ -63,6 +70,10 @@ class Client:
 
 
     def close(self):
+        if not self.config:
+            print("Client is not configured. Please load the config file first!")
+            return
+
         # Send notification to the server that client is being disconnected
         self.send(f"DISCONNECT")
 
@@ -75,6 +86,10 @@ class Client:
         if not self.config:
             print("Client is not configured. Please load the config file first!")
             return
+
+        if self.action_delay <= 0:
+            print("WARNING: Incorrect action delay value. Default value 1 is used")
+            self.action_delay = 1
 
         # Make a call to execute each step of the client's routine
         for step in self.action_steps:
@@ -93,16 +108,16 @@ if __name__ == "__main__":
     client1.load_config(json.loads(open("./configs/client1.json").read()))
     client1.connect()
 
-    client2 = Client()
-    client2.load_config(json.loads(open("./configs/client2.json").read()))
-    client2.connect()
-
-    client3 = Client()
-    client3.load_config(json.loads(open("./configs/client3.json").read()))
-    client3.connect()
-    client3.execute_routines()
+    # client2 = Client()
+    # client2.load_config(json.loads(open("./configs/client2.json").read()))
+    # client2.connect()
+    #
+    # client3 = Client()
+    # client3.load_config(json.loads(open("./configs/client3.json").read()))
+    # client3.connect()
+    # client3.execute_routines()
 
     client1.execute_routines()
     client1.close()
-    client2.close()
-    client3.close()
+    # client2.close()
+    # client3.close()
