@@ -1,12 +1,31 @@
+import os
+import pathlib
 import socket
 import threading
 import logging
+import bcrypt
+
 
 from support_methods import is_valid_password
 
 MAX_CLIENT_CONNECTIONS = 2
 MAX_INT_VALUE = 2 ** 31 - 1 # limiting value for integer
 
+def generate_ssl_certificates():
+    """
+    Generate self-signed SSL certificates for secure communication.
+    In a production environment, use properly signed certificates.
+    """
+    # Ensure certificates directory exists
+    cert_dir = pathlib.Path('certificates')
+    cert_dir.mkdir(exist_ok=True)
+
+    # Generate server private key
+    os.system('openssl genrsa -out certificates/server.key 2048')
+
+    # Generate self-signed certificate
+    os.system(f'openssl req -new -x509 -key certificates/server.key -out certificates/server.crt -days 365 \
+        -subj "/C=US/ST=YourState/L=YourCity/O=YourOrganization/OU=YourUnit/CN=localhost"')
 
 def register_client(client_id: str, password: str) -> str:
     # Check password validity
@@ -16,8 +35,9 @@ def register_client(client_id: str, password: str) -> str:
 
     # Register new client if not presented in the database
     if client_id not in client_database:
+        hashed_password = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
         client_database[client_id] = {
-            'password': password,
+            'password': hashed_password,
             'counter': 0,
             'connections': 1
         }
@@ -25,9 +45,9 @@ def register_client(client_id: str, password: str) -> str:
         logging.info(f"Registered client {client_id}")
         return f"ACK Client {client_id} registered."
 
-    if client_database[client_id]['password'] != password:
-        logging.error(f"{client_id}: Client  password mismatch. Registration refused")
-        return f"ERROR: {client_id}: Client  password mismatch. Registration refused"
+    if not bcrypt.checkpw(password.encode(), client_database[client_id]['password'].encode()):
+        logging.error(f"{client_id}: Client password mismatch. Registration refused")
+        return f"ERROR {client_id}: Client password mismatch. Registration refused"
 
     # Update already existing client data
     if client_database[client_id]["connections"] == MAX_CLIENT_CONNECTIONS:

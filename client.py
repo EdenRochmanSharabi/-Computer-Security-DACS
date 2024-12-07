@@ -1,11 +1,29 @@
+import os
+import pathlib
 import socket
 import json
+import subprocess
 import time
 
 from support_methods import validate_config
 
 
 class Client:
+
+    def verify_ssl_certificates(self):
+        """
+        Verify SSL certificates exist, otherwise create them.
+        For production, replace this with proper certificate management.
+        """
+    cert_path = pathlib.Path('certificates/server.crt')
+
+    if not cert_path.exists():
+        print("Warning: Server certificate not found. Generating self-signed certificate.")
+        os.system('''
+        mkdir -p certificates
+        openssl req -x509 -newkey rsa:4096 -keyout certificates/server.key -out certificates/server.crt \
+        -days 365 -nodes -subj "/CN=localhost"
+        ''')
 
     def __init__(self):
         # Create socket
@@ -116,16 +134,16 @@ if __name__ == "__main__":
     client1.load_config(json.loads(open("./configs/client1.json").read()))
     client1.connect()
 
-    client2 = Client()
-    client2.load_config(json.loads(open("./configs/client2.json").read()))
-    client2.connect()
-
-    client3 = Client()
-    client3.load_config(json.loads(open("./configs/client3.json").read()))
-    client3.connect()
-    client3.execute_routines()
+    # client2 = Client()
+    # client2.load_config(json.loads(open("./configs/client2.json").read()))
+    # client2.connect()
+    #
+    # client3 = Client()
+    # client3.load_config(json.loads(open("./configs/client3.json").read()))
+    # client3.connect()
+    # client3.execute_routines()
 
     client1.execute_routines()
     client1.close()
-    client2.close()
-    client3.close()
+    # client2.close()
+    # client3.close()
