@@ -1,6 +1,7 @@
 import os
 import pathlib
 import socket
+import ssl
 import threading
 import logging
 import bcrypt
@@ -11,11 +12,14 @@ from support_methods import is_valid_password
 MAX_CLIENT_CONNECTIONS = 2
 MAX_INT_VALUE = 2 ** 31 - 1 # limiting value for integer
 
+ssl_context = None # create global ssl context
+
 def generate_ssl_certificates():
     """
     Generate self-signed SSL certificates for secure communication.
     In a production environment, use properly signed certificates.
     """
+
     # Ensure certificates directory exists
     cert_dir = pathlib.Path('certificates')
     cert_dir.mkdir(exist_ok=True)
@@ -26,6 +30,16 @@ def generate_ssl_certificates():
     # Generate self-signed certificate
     os.system(f'openssl req -new -x509 -key certificates/server.key -out certificates/server.crt -days 365 \
         -subj "/C=US/ST=YourState/L=YourCity/O=YourOrganization/OU=YourUnit/CN=localhost"')
+
+
+    global ssl_context # use ssl context from outer scope
+    ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+
+    # Configure server-side SSL
+    ssl_context.load_cert_chain(
+        certfile="certificates/server.crt",
+        keyfile="certificates/server.key",
+    )
 
 def register_client(client_id: str, password: str) -> str:
     # Check password validity
@@ -95,38 +109,45 @@ def execute_action(client_id: str, action: str) -> str:
 
 
 def handle_client(client_socket):
-    msg = client_socket.recv(1024).decode().strip()
-
-    if not msg.startswith("REGISTER"):
-        client_socket.sendall("ERROR Handling rejected. Registration format violated".encode())
-        return
-
-    _, client_id, password = msg.split(" ")
-
-    response = register_client(client_id, password)
-    client_socket.sendall(response.encode())
-
-    while not response.startswith("ERROR"):
-        print(client_database)
+    try:
         msg = client_socket.recv(1024).decode().strip()
 
-        if msg.startswith("EXECUTE"):
-            response = execute_action(client_id, msg[8:])
-            client_socket.sendall(response.encode())
+        if not msg.startswith("REGISTER"):
+            client_socket.sendall("ERROR Handling rejected. Registration format violated".encode())
+            return
 
-        elif msg.startswith("DISCONNECT"):
-            response = disconnect_client(client_id)
-            client_socket.sendall(response.encode())
+        _, client_id, password = msg.split(" ")
 
-            break
-    else:
-        logging.error(response)
+        response = register_client(client_id, password)
+        client_socket.sendall(response.encode())
 
-    client_socket.close()
+        while not response.startswith("ERROR"):
+            print(client_database)
+            msg = client_socket.recv(1024).decode().strip()
+
+            if msg.startswith("EXECUTE"):
+                response = execute_action(client_id, msg[8:])
+                client_socket.sendall(response.encode())
+
+            elif msg.startswith("DISCONNECT"):
+                response = disconnect_client(client_id)
+                client_socket.sendall(response.encode())
+
+                break
+        else:
+            logging.error(response)
+
+
+    except ssl.SSLError as ssl_err:
+        logging.error(f"SSL Error in client handling: {ssl_err}")
+    finally:
+        client_socket.close()
 
 
 
 if __name__ == '__main__':
+    generate_ssl_certificates()
+
     # Create database and config
     client_database = dict()
     logging.basicConfig(filename='server.log', encoding='utf-8', level=logging.DEBUG)
@@ -139,6 +160,13 @@ if __name__ == '__main__':
     server_socket.bind(('localhost', 5000))
     # become a server socket
     server_socket.listen(5)
+
+    # Wrap socket with SSL
+    if ssl_context is not None:
+        server_socket = ssl_context.wrap_socket(
+            server_socket,
+            server_side=True
+        )
 
     while True:
         # accept connections from outside
