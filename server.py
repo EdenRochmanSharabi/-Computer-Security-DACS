@@ -1,8 +1,11 @@
-# Server.py
-
+import os
+import pathlib
 import socket
+import ssl
 import threading
 import logging
+import bcrypt
+
 
 from support_methods import is_valid_password
 
@@ -10,6 +13,34 @@ MAX_CLIENT_CONNECTIONS = 2
 MAX_INT_VALUE = 2 ** 31 - 1 # limiting value for integer
 DEBUG = True
 
+ssl_context = None # create global ssl context
+
+def generate_ssl_certificates():
+    """
+    Generate self-signed SSL certificates for secure communication.
+    In a production environment, use properly signed certificates.
+    """
+
+    # Ensure certificates directory exists
+    cert_dir = pathlib.Path('certificates')
+    cert_dir.mkdir(exist_ok=True)
+
+    # Generate server private key
+    os.system('openssl genrsa -out certificates/server.key 2048')
+
+    # Generate self-signed certificate
+    os.system(f'openssl req -new -x509 -key certificates/server.key -out certificates/server.crt -days 365 \
+        -subj "/C=US/ST=YourState/L=YourCity/O=YourOrganization/OU=YourUnit/CN=localhost"')
+
+
+    global ssl_context # use ssl context from outer scope
+    ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+
+    # Configure server-side SSL
+    ssl_context.load_cert_chain(
+        certfile="certificates/server.crt",
+        keyfile="certificates/server.key",
+    )
 
 def register_client(client_id: str, password: str) -> str:
     # Check password validity
@@ -19,8 +50,9 @@ def register_client(client_id: str, password: str) -> str:
 
     # Register new client if not presented in the database
     if client_id not in client_database:
+        hashed_password = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
         client_database[client_id] = {
-            'password': password,
+            'password': hashed_password,
             'counter': 0,
             'connections': 1
         }
@@ -28,9 +60,9 @@ def register_client(client_id: str, password: str) -> str:
         logging.info(f"Registered client {client_id if DEBUG else ''}")
         return f"ACK Client registered."
 
-    if client_database[client_id]['password'] != password:
-        logging.error(f"{client_id if DEBUG else ''}: Client  password mismatch. Registration refused")
-        return f"ERROR: Client password mismatch. Registration refused"
+    if not bcrypt.checkpw(password.encode(), client_database[client_id]['password'].encode()):
+        logging.error(f"{client_id if DEBUG else ''}: Client password mismatch. Registration refused")
+        return f"ERROR:  Client password mismatch. Registration refused"
 
     # Update already existing client data
     if client_database[client_id]["connections"] == MAX_CLIENT_CONNECTIONS:
@@ -84,40 +116,45 @@ def execute_action(client_id: str, action: str) -> str:
 
 
 def handle_client(client_socket):
-    msg = client_socket.recv(1024).decode().strip()
-
-    if not msg.startswith("REGISTER"):
-        client_socket.sendall("ERROR: Handling rejected. Registration format violated".encode())
-        return
-
-    _, client_id, password = msg.split(" ")
-
-    response = register_client(client_id, password)
-    client_socket.sendall(response.encode())
-
-    while not response.startswith("ERROR"):
-        print(client_database)
-
-        # if DEBUG:
+    try:
         msg = client_socket.recv(1024).decode().strip()
 
-        if msg.startswith("EXECUTE"):
-            response = execute_action(client_id, msg[8:])
-            client_socket.sendall(response.encode())
+        if not msg.startswith("REGISTER"):
+            client_socket.sendall("ERROR: Handling rejected. Registration format violated".encode())
+            return
 
-        elif msg.startswith("DISCONNECT"):
-            response = disconnect_client(client_id)
-            client_socket.sendall(response.encode())
+        _, client_id, password = msg.split(" ")
 
-            break
-    else:
-        logging.error(response)
+        response = register_client(client_id, password)
+        client_socket.sendall(response.encode())
 
-    client_socket.close()
+        while not response.startswith("ERROR"):
+            print(client_database)
+            msg = client_socket.recv(1024).decode().strip()
+
+            if msg.startswith("EXECUTE"):
+                response = execute_action(client_id, msg[8:])
+                client_socket.sendall(response.encode())
+
+            elif msg.startswith("DISCONNECT"):
+                response = disconnect_client(client_id)
+                client_socket.sendall(response.encode())
+
+                break
+        else:
+            logging.error(response)
+
+
+    except ssl.SSLError as ssl_err:
+        logging.error(f"SSL Error in client handling: {ssl_err}")
+    finally:
+        client_socket.close()
 
 
 
 if __name__ == '__main__':
+    generate_ssl_certificates()
+
     # Create database and config
     client_database = dict()
     logging.basicConfig(filename='server.log', encoding='utf-8', level=logging.DEBUG)
@@ -130,6 +167,12 @@ if __name__ == '__main__':
     server_socket.bind(('localhost', 5000))
     # become a server socket
     server_socket.listen(5)
+
+    # Wrap socket with SSL
+    server_socket = ssl_context.wrap_socket(
+        server_socket,
+        server_side=True
+    )
 
     while True:
         # accept connections from outside

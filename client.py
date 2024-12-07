@@ -1,15 +1,48 @@
+import os
+import pathlib
 import socket
 import json
+import ssl
+import subprocess
 import time
 
+from server import ssl_context
 from support_methods import validate_config
+
+
+def verify_ssl_certificates():
+    """
+    Verify SSL certificates exist, otherwise create them.
+    For production, replace this with proper certificate management.
+    """
+    cert_path = pathlib.Path('certificates/server.crt')
+
+    if not cert_path.exists():
+        print("Warning: Server certificate not found. Generating self-signed certificate.")
+        os.system('''
+        mkdir -p certificates
+        openssl req -x509 -newkey rsa:4096 -keyout certificates/server.key -out certificates/server.crt \
+        -days 365 -nodes -subj "/CN=localhost"
+        ''')
 
 
 class Client:
 
-    def __init__(self):
-        # Create socket
+    def __init__(self, cert_path):
+        if cert_path is not None:
+            # Create SSL context
+            self.ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
 
+            # Load CA certificates (for verifying server)
+            self.ssl_context.load_verify_locations(cert_path)
+
+            # Disable hostname checking for local development (remove in production)
+            self.ssl_context.check_hostname = False
+
+        else:
+            raise ValueError("Certificate path is required.")
+
+            # Create base socket
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
         self.config = None
@@ -51,6 +84,11 @@ class Client:
             print("Client is not configured. Please load the config file first!")
             return
 
+        self.socket = self.ssl_context.wrap_socket(
+            self.socket,
+            server_hostname=self.host_ip
+        )
+
         # Use data from the config to connect to the server
         self.socket.connect((self.host_ip, self.port))
         # Register in the server
@@ -62,6 +100,8 @@ class Client:
         # Send the message to the server
         try:
             self.socket.sendall(msg.encode())
+        except ssl.SSLError as e:
+            print(f"Message was not sent. SSL Error: {e}")
         except socket.error as err:
             print(f"{self.id}: Message {msg} was not sent. The following error occurred: {err}")
 
@@ -70,10 +110,13 @@ class Client:
         # Save message received from the server
         try:
             received_msg = self.socket.recv(buffer_size).decode()
-
+        except ssl.SSLError as e:
+            print(f"Message was not sent. SSL Error: {e}")
+            return ""
         except socket.error as err:
             print(f"{self.id}: Message was not received. The following error occurred: {err}")
             return ""
+
         return received_msg
 
 
@@ -112,7 +155,8 @@ class Client:
 if __name__ == "__main__":
     # It's expected that some errors occur, while executing following code. I was testing how does it handle password mismatch
     # and such things
-    client1 = Client()
+    client1 = Client("certificates/server.crt")
+    verify_ssl_certificates()
     client1.load_config(json.loads(open("./configs/client1.json").read()))
     client1.connect()
 
