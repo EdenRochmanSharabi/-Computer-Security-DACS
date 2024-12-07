@@ -11,7 +11,7 @@ from support_methods import is_valid_password
 
 MAX_CLIENT_CONNECTIONS = 2
 MAX_INT_VALUE = 2 ** 31 - 1 # limiting value for integer
-DEBUG = True
+DEBUG = False
 
 ssl_context = None # create global ssl context
 
