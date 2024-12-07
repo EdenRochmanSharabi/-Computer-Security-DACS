@@ -1,3 +1,5 @@
+# Server.py
+
 import socket
 import threading
 import logging
@@ -6,13 +8,14 @@ from support_methods import is_valid_password
 
 MAX_CLIENT_CONNECTIONS = 2
 MAX_INT_VALUE = 2 ** 31 - 1 # limiting value for integer
+DEBUG = True
 
 
 def register_client(client_id: str, password: str) -> str:
     # Check password validity
-    if is_valid_password(password):
-        logging.error(f"{client_id}: Password doesn't fulfill requirements. Registration refused")
-        return f"ERROR {client_id}: : Password doesn't fulfill requirements. Registration refused"
+    if not is_valid_password(password):
+        logging.error(f"{client_id if DEBUG else ''}: Password doesn't fulfill requirements. Registration refused")
+        return f"ERROR: Password doesn't fulfill requirements. Registration refused"
 
     # Register new client if not presented in the database
     if client_id not in client_database:
@@ -22,21 +25,21 @@ def register_client(client_id: str, password: str) -> str:
             'connections': 1
         }
 
-        logging.info(f"Registered client {client_id}")
-        return f"ACK Client {client_id} registered."
+        logging.info(f"Registered client {client_id if DEBUG else ''}")
+        return f"ACK Client registered."
 
     if client_database[client_id]['password'] != password:
-        logging.error(f"{client_id}: Client  password mismatch. Registration refused")
-        return f"ERROR: {client_id}: Client  password mismatch. Registration refused"
+        logging.error(f"{client_id if DEBUG else ''}: Client  password mismatch. Registration refused")
+        return f"ERROR: Client password mismatch. Registration refused"
 
     # Update already existing client data
     if client_database[client_id]["connections"] == MAX_CLIENT_CONNECTIONS:
-        logging.warning(f"Client {client_id} is already registered. Connection refused, as limit per client is reached")
-        return f"ACK Client {client_id} is already registered. Connection refused, as limit per client is reached"
+        logging.warning(f"Client {client_id if DEBUG else ''} is already registered. Connection refused, as limit per client is reached")
+        return f"ACK Client is already registered. Connection refused, as limit per client is reached"
 
     client_database[client_id]["connections"] += 1
-    logging.info(f"Client {client_id} is already registered. Connection added instead")
-    return f"ACK Client {client_id} is already registered. Connection added instead"
+    logging.info(f"Client {client_id if DEBUG else ''} is already registered. Connection added instead")
+    return f"ACK Client is already registered. Connection added instead"
 
 
 def disconnect_client(client_id: str) -> str:
@@ -46,18 +49,23 @@ def disconnect_client(client_id: str) -> str:
     # Erase all data about client if no instances are present
     if client_database[client_id]['connections'] == 0:
         client_database.pop(client_id)
-        return f"ACK Last instance of {client_id} disconnected. All data erased"
+        return f"ACK Last instance of client {client_id if DEBUG else ''} disconnected. All data erased"
 
-    return f"ACK Instance of client {client_id} disconnected"
+    return f"ACK Instance of client disconnected. All data erased"
 
 
 def execute_action(client_id: str, action: str) -> str:
     try:
         action_type = action.split(" ")[0]
+        print(action.split(" ")[1].strip("[]"))
         amount = min(int(action.split(" ")[1].strip("[]")), MAX_INT_VALUE)
-    except ValueError as e: # Catch incorrect action values
-        logging.warning(f"{client_id}: Action ignored. Action value is not supported. Should be int")
-        return f"WARNING {client_id}: Action ignored. Action value is not supported. Should be int"
+    except ValueError: # Catch incorrect action values
+        logging.warning(f"{client_id if DEBUG else ''}: Action ignored. Action value is not supported. Should be int")
+        return f"WARNING: Action ignored. Action value is not supported. Should be int"
+
+    except IndexError:
+        logging.warning(f"{client_id if DEBUG else ''}: Action ignored. Missing action value")
+        return f"WARNING: Action ignored. Missing action value"
 
     if action_type.upper() == "INCREASE":
         client_database[client_id]['counter'] += amount
@@ -66,19 +74,20 @@ def execute_action(client_id: str, action: str) -> str:
         client_database[client_id]['counter'] -= amount
 
     else:
-        logging.warning(f"{client_id}: Action ignored. Action type {action_type} not supported")
-        return f"WARNING {client_id}: Action ignored. Action type {action_type} not supported"
+        logging.warning(f"{client_id if DEBUG else ''}: Action ignored. Action type {action_type} not supported")
+        return f"WARNING: Action ignored. Action type {action_type} not supported"
 
-    logging.info(f"{client_id} {action_type.lower()}d counter by {amount}. New value: {client_database[client_id]['counter']}\n")
+    if DEBUG:
+        logging.info(f"{client_id} {action_type.lower()}d counter by {amount}. New value: {client_database[client_id]['counter']}\n")
 
-    return f"ACK counter updated. New value: {client_database[client_id]['counter']}"
+    return f"ACK counter updated"
 
 
 def handle_client(client_socket):
     msg = client_socket.recv(1024).decode().strip()
 
     if not msg.startswith("REGISTER"):
-        client_socket.sendall("ERROR Handling rejected. Registration format violated".encode())
+        client_socket.sendall("ERROR: Handling rejected. Registration format violated".encode())
         return
 
     _, client_id, password = msg.split(" ")
@@ -88,6 +97,8 @@ def handle_client(client_socket):
 
     while not response.startswith("ERROR"):
         print(client_database)
+
+        # if DEBUG:
         msg = client_socket.recv(1024).decode().strip()
 
         if msg.startswith("EXECUTE"):

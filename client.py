@@ -116,16 +116,16 @@ if __name__ == "__main__":
     client1.load_config(json.loads(open("./configs/client1.json").read()))
     client1.connect()
 
-    client2 = Client()
-    client2.load_config(json.loads(open("./configs/client2.json").read()))
-    client2.connect()
-
-    client3 = Client()
-    client3.load_config(json.loads(open("./configs/client3.json").read()))
-    client3.connect()
-    client3.execute_routines()
+    # client2 = Client()
+    # client2.load_config(json.loads(open("./configs/client2.json").read()))
+    # client2.connect()
+    #
+    # client3 = Client()
+    # client3.load_config(json.loads(open("./configs/client3.json").read()))
+    # client3.connect()
+    # client3.execute_routines()
 
     client1.execute_routines()
     client1.close()
-    client2.close()
-    client3.close()
+    # client2.close()
+    # client3.close()
