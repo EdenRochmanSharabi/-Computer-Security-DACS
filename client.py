@@ -155,7 +155,7 @@ class Client:
 if __name__ == "__main__":
     client1 = Client("certificates/server.crt")
     verify_ssl_certificates()
-    client1.load_config(json.loads(open("./configs/client3.json").read()))
+    client1.load_config(json.loads(open("./configs/client3.json").read())) # change here which client JSON file you would like to run : client1, client2, client3 are available 
     client1.connect()
 
     client1.execute_routines()
